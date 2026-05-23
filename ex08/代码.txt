@@ -1,0 +1,120 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "helan";
+const char* password = "12345678";
+
+const int LED_PIN = 2;
+const int TOUCH_PIN = 4;
+const int TOUCH_THRESH = 700;
+
+bool isArmed = false;
+bool isAlarming = false;
+
+WebServer server(80);
+
+String makePage() {
+  String sysState = isArmed ? "已布防" : "已撤防";
+  String alarmState = isAlarming ? "报警触发" : "正常待机";
+
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{text-align:center; margin-top:50px; font-family:Arial;}
+.btn{padding:14px 28px; margin:10px; border:none; border-radius:6px; color:white; font-size:16px;}
+.arm{background:red;}
+.disarm{background:green;}
+</style>
+</head>
+<body>
+<h2>物联网安防报警器</h2>
+<p>系统状态：<b>)rawliteral" + sysState + R"rawliteral(</b></p>
+<p>报警状态：<b>)rawliteral" + alarmState + R"rawliteral(</b></p>
+<a href="/arm"><button class="btn arm">布防 Arm</button></a>
+<a href="/disarm"><button class="btn disarm">撤防 Disarm</button></a>
+</body>
+</html>
+)rawliteral";
+  return html;
+}
+
+void handleRoot() {
+  server.send(200, "text/html; charset=utf-8", makePage());
+}
+
+void handleArm() {
+  isArmed = true;
+  isAlarming = false;
+  digitalWrite(LED_PIN, LOW);
+  
+  // 修复：旧版ESP32不支持redirect，用标准303跳转
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void handleDisarm() {
+  isArmed = false;
+  isAlarming = false;
+  digitalWrite(LED_PIN, LOW);
+  
+  // 修复：标准跳转方法
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  WiFi.begin(ssid, password);
+
+  Serial.print("连接WiFi...");
+  int cnt = 0;
+  while (WiFi.status() != WL_CONNECTED && cnt < 25) {
+    delay(500);
+    Serial.print(".");
+    cnt++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n连接成功！");
+    Serial.print("IP: http://");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n连接失败");
+  }
+
+  server.on("/", handleRoot);
+  server.on("/arm", handleArm);
+  server.on("/disarm", handleDisarm);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+
+  // 只有【布防 + 没报警】时，触摸才触发
+  if (isArmed && !isAlarming) {
+    if (touchRead(TOUCH_PIN) < TOUCH_THRESH) {
+      isAlarming = true;
+    }
+  }
+
+  // 报警时狂闪
+  if (isAlarming) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(LED_PIN, LOW);
+    delay(100);
+  } else {
+    digitalWrite(LED_PIN, LOW);
+  }
+}

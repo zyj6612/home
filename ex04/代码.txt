@@ -1,0 +1,50 @@
+#define TOUCH_PIN 4
+#define LED_PIN 2
+#define THRESHOLD 700   
+#define DEBOUNCE_MS 50  // 防抖时间
+
+bool ledState = false;
+bool lastTouched = false;
+unsigned long lastTouchTime = 0;
+
+// 中断服务函数
+void gotTouch() {
+  bool currentTouched = (touchRead(TOUCH_PIN) < THRESHOLD);
+  unsigned long now = millis();
+
+  // 边缘检测 + 防抖
+  if (currentTouched && !lastTouched && (now - lastTouchTime > DEBOUNCE_MS)) {
+    ledState = !ledState;
+    digitalWrite(LED_PIN, ledState);
+    lastTouchTime = now;
+  }
+
+  lastTouched = currentTouched;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("======== ESP32 触摸开关实验 ========");
+  Serial.println("触摸 GPIO4 控制 LED 亮灭");
+  Serial.println("-----------------------------------");
+
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, ledState);
+
+  // 绑定触摸中断
+  touchAttachInterrupt(TOUCH_PIN, gotTouch, THRESHOLD);
+}
+
+void loop() {
+  // 实时打印触摸值 + LED状态
+  int touchValue = touchRead(TOUCH_PIN);
+  Serial.print("触摸值: ");
+  Serial.print(touchValue);
+  Serial.print(" | 阈值: ");
+  Serial.print(THRESHOLD);
+  Serial.print(" | LED状态: ");
+  Serial.println(ledState ? "ON 亮" : "OFF 灭");
+
+  delay(200); // 刷新速度
+}

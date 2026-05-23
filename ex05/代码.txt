@@ -1,0 +1,72 @@
+#define TOUCH_PIN 4
+#define LED_PIN 2
+#define THRESHOLD 1000
+#define DEBOUNCE_MS 80   // 防抖时间
+
+// 呼吸灯参数：3个档位 → 步长越大，呼吸越快
+const int speedSteps[] = {1, 3, 5};  // 档位1：慢；档位2：中；档位3：快
+int currentGear = 0;                 // 当前档位（0=1档，1=2档，2=3档）
+
+bool ledState = false;
+bool lastTouched = false;
+unsigned long lastTouchTime = 0;
+
+int brightness = 0;   // LED亮度 0~255
+int fadeDirection = 1; // 亮度增减方向
+
+// 中断服务函数：只负责切换档位
+void gotTouch() {
+  bool currentTouched = (touchRead(TOUCH_PIN) < THRESHOLD);
+  unsigned long now = millis();
+
+  // 边缘检测 + 防抖：只在按下瞬间切换档位
+  if (currentTouched && !lastTouched && (now - lastTouchTime > DEBOUNCE_MS)) {
+    // 档位循环切换 0→1→2→0
+    currentGear = (currentGear + 1) % 3;
+    lastTouchTime = now;
+  }
+
+  lastTouched = currentTouched;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("===== ESP32 3档触摸呼吸灯 =====");
+  Serial.println("触摸GPIO4切换速度：1慢 → 2中 → 3快");
+  Serial.println("----------------------------------");
+
+  pinMode(LED_PIN, OUTPUT);
+  touchAttachInterrupt(TOUCH_PIN, gotTouch, THRESHOLD);
+}
+
+void loop() {
+  // ================= 呼吸灯核心 =================
+  // 根据当前档位获取步长（速度）
+  int step = speedSteps[currentGear];
+  
+  // 改变亮度
+  brightness += fadeDirection * step;
+
+  // 到达边界就反转方向
+  if (brightness <= 0 || brightness >= 255) {
+    fadeDirection = -fadeDirection;
+  }
+
+  // PWM输出亮度（ESP32支持任意引脚模拟输出）
+  analogWrite(LED_PIN, brightness);
+  delay(10); // 基础刷新间隔，不影响速度档位
+
+
+  // ================= 串口实时输出 =================
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 200) { // 每200ms打印一次，不刷屏
+    Serial.print("当前档位：");
+    Serial.print(currentGear + 1);
+    Serial.print(" 档 | 速度步长：");
+    Serial.print(step);
+    Serial.print(" | 亮度：");
+    Serial.println(brightness);
+    lastPrint = millis();
+  }
+}

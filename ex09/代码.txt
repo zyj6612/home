@@ -1,0 +1,105 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// WiFi 信息
+const char* ssid = "helan";
+const char* password = "12345678";
+
+// 触摸引脚
+const int TOUCH_PIN = 4;
+
+WebServer server(80);
+
+// 主页面
+String getHtml() {
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时触摸传感器仪表盘</title>
+  <style>
+    body{
+      text-align:center;
+      font-family:Arial;
+      background:#1a1a1a;
+      color:white;
+      padding-top:60px;
+    }
+    .value{
+      font-size:70px;
+      font-weight:bold;
+      color:#00ff99;
+      margin:40px 0;
+    }
+    .title{
+      font-size:24px;
+      margin-bottom:10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">ESP32 实时触摸传感器数值</div>
+  <div class="value" id="touchVal">0</div>
+
+  <script>
+    // 每 100ms 请求一次最新数据
+    setInterval(function() {
+      fetch("/data")
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("touchVal").innerText = data;
+      });
+    }, 100);
+  </script>
+</body>
+</html>
+)rawliteral";
+  return html;
+}
+
+// 首页
+void handleRoot() {
+  server.send(200, "text/html; charset=utf-8", getHtml());
+}
+
+// 返回实时触摸值（AJAX 调用）
+void handleData() {
+  int val = touchRead(TOUCH_PIN);
+  server.send(200, "text/plain", String(val));
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  // WiFi 连接
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  WiFi.begin(ssid, password);
+
+  Serial.print("连接 WiFi...");
+  int timeout = 0;
+  while (WiFi.status() != WL_CONNECTED && timeout < 30) {
+    delay(500);
+    Serial.print(".");
+    timeout++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi 连接成功！");
+    Serial.print("访问地址：http://");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nWiFi 连接失败！");
+  }
+
+  server.on("/", handleRoot);
+  server.on("/data", handleData);  // 实时数据接口
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}

@@ -1,0 +1,30 @@
+#define LED_A_PIN 2
+#define LED_B_PIN 16
+
+int brightness = 0;
+int fadeStep = 4;        // 加大步长提升速度
+int fadeDirection = 1;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_A_PIN, OUTPUT);
+  pinMode(LED_B_PIN, OUTPUT);
+}
+
+void loop() {
+  brightness += fadeDirection * fadeStep;
+
+  if (brightness <= 0 || brightness >= 255) {
+    fadeDirection = -fadeDirection;
+  }
+
+  analogWrite(LED_A_PIN, brightness);
+  analogWrite(LED_B_PIN, 255 - brightness);
+
+  Serial.print("A:");
+  Serial.print(brightness);
+  Serial.print(" B:");
+  Serial.println(255 - brightness);
+
+  delay(4);  // 缩短延时，画面更流畅
+}
