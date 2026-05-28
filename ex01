@@ -1,0 +1,14 @@
+#include <stdio.h>
+
+int main() {
+    char text[100];
+    
+    printf("请输入内容：");
+    // 键盘输入
+    scanf("%s", text);
+    
+    // 输出输入的内容
+    printf("你输入的是：%s\n", text);
+    
+    return 0;
+}
